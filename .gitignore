@@ -1,0 +1,30 @@
+# Rust
+/target
+
+# Environment
+.env
+.env.*.local
+
+# IDE
+.idea
+.vscode/
+
+# OS
+.DS_Store/
+Thumbs.db
+
+# Node.js (if any)
+node_modules/
+dist/
+
+# Config
+config.toml.local
+
+# Logs
+*.log
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target

@@ -1,0 +1,22 @@
+[auth]
+# ? the key to sign the token
+signing_key = 'K3yInD3v3l0pm3nt'
+
+[cluster.registry]
+enabled  = true
+insecure = true
+server   = "localhost:5000"
+# username =
+# password =
+
+[database]
+host     = '127.0.0.1'
+port     = 5432
+ssl_mode = 'disable' # disable, allow, prefer, require, verify-ca, verify-full
+user     = 'ret2shell'
+password = 'P@ssw02dInD3v3l0pm3nt'
+db       = 'ret2shell'
+
+[server]
+host = "0.0.0.0"
+port = "1331"
