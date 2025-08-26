@@ -28,3 +28,7 @@ config.toml.local
 # already existing elements were commented out
 
 #/target
+
+healthcheck/build/
+*.o
+*.a
