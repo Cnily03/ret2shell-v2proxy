@@ -49,20 +49,25 @@ pub struct ServerConfig {
 impl Config {
     pub async fn load() -> Result<Self> {
         // Try to load from current directory first
-        if Path::new("config.toml").exists() {
+        let mut config: Config = if Path::new("config.toml").exists() {
             let content = fs::read_to_string("config.toml").await?;
-            let config: Config = toml::from_str(&content)?;
-            return Ok(config);
-        }
-
-        // Try to load from /etc/ret2shell/config.toml
-        if Path::new("/etc/ret2shell/config.toml").exists() {
+            toml::from_str(&content)?
+        } else if Path::new("/etc/ret2shell/config.toml").exists() {
+            // Try to load from /etc/ret2shell/config.toml
             let content = fs::read_to_string("/etc/ret2shell/config.toml").await?;
-            let config: Config = toml::from_str(&content)?;
-            return Ok(config);
+            toml::from_str(&content)?
+        } else {
+            anyhow::bail!(
+                "Config file not found in current directory or /etc/ret2shell/config.toml"
+            );
+        };
+
+        // Override with environment variables if specified
+        if let Ok(server_port) = std::env::var("LISTEN_PORT") {
+            config.server.port = server_port;
         }
 
-        anyhow::bail!("Config file not found in current directory or /etc/ret2shell/config.toml");
+        Ok(config)
     }
 
     pub fn database_url(&self) -> String {

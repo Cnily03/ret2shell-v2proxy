@@ -37,6 +37,7 @@ services:
     depends_on:
       - platform
     environment:
+      LISTEN_PORT: 1331
       V2_SERVICE: ret2shell
     # extra_hosts:
     #   - host.docker.internal:host-gateway
