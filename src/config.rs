@@ -43,7 +43,7 @@ pub struct DatabaseConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServerConfig {
     pub host: String,
-    pub port: String,
+    pub port: u16,
 }
 
 impl Config {
@@ -64,7 +64,9 @@ impl Config {
 
         // Override with environment variables if specified
         if let Ok(server_port) = std::env::var("LISTEN_PORT") {
-            config.server.port = server_port;
+            if let Ok(port) = server_port.parse::<u16>() {
+                config.server.port = port;
+            }
         }
 
         Ok(config)
