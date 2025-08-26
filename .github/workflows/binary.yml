@@ -80,6 +80,7 @@ jobs:
           name: r2s-v2proxy-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}-${{ matrix.target }}
           path: |
             target/${{ matrix.target }}/release/r2s-v2proxy
+            target/${{ matrix.target }}/release/r2s-v2proxy.exe
           retention-days: 1
 
   clippy-check:
