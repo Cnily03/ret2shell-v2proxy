@@ -2,6 +2,14 @@
 
 Docker registry API for Ret2Shell. External deployment.
 
+## Feature
+
+User who have `Game` permission to specific game can push/pull `ret.sh.cn/{namespace}/{image}` where namespace can be game id or bucket. And the user can only pull `ret.sh.cn/{image}` or `ret.sh.cn/library/{image}`.
+
+User who have both `Game` and `DevOps` permissions can push/pull `ret.sh.cn/{image}` or `ret.sh.cn/library/{image}`.
+
+Command `docker login` is supported.
+
 ## Deployment
 
 You need to pass `config.toml` to `/etc/passwd`, and ensure the database and registry can be visited.
@@ -38,3 +46,9 @@ services:
       - 1331:1331
 
 ```
+
+## License
+
+Copyright (c) Cnily03. All rights reserved.
+
+Licensed under the [MIT](LICENSE) license.
