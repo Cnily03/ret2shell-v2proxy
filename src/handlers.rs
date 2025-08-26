@@ -109,7 +109,7 @@ pub async fn registry_v2_check(
 pub async fn auth_handler(
     State(state): State<Arc<AppState>>,
     Query(auth_req): Query<AuthRequest>,
-    headers: HeaderMap
+    headers: HeaderMap,
 ) -> impl IntoResponse {
     debug!(
         service = auth_req.service,
@@ -238,14 +238,21 @@ pub async fn auth_handler(
                 let mut scope_parts_clone = scope_parts.clone();
                 let library_scope = format!("library/{}", scope_parts_clone[1]);
                 scope_parts_clone[1] = &library_scope;
-                info!("Converted scope {} -> {}", auth_req.scope.clone().unwrap_or_default(), library_scope);
+                info!(
+                    "Converted scope {} -> {}",
+                    auth_req.scope.clone().unwrap_or_default(),
+                    library_scope
+                );
                 auth_req.scope = Some(scope_parts_clone.join(":"));
             } else {
                 // Check if user is admin of the specified game scope
                 match state.database.get_game_by_namespace(namespace).await {
                     Ok(Some(game)) => {
                         if !game.is_admin(user.id) {
-                            warn!("User '{}' is not admin of game {}: {}", username, game.id, game.bucket);
+                            warn!(
+                                "User '{}' is not admin of game {}: {}",
+                                username, game.id, game.bucket
+                            );
                             return create_error_response(
                                 StatusCode::UNAUTHORIZED,
                                 "Access denied",
@@ -253,19 +260,26 @@ pub async fn auth_handler(
                         }
                         let bucket_clone = game.bucket.clone();
                         if bucket_clone != namespace {
-                          // convert namespace from id to bucket
-                          let mut scope_image_parts = scope_image_parts.to_vec();
-                          scope_image_parts[0] = &bucket_clone;
-                          let mut scope_parts = scope_parts.to_vec();
-                          let scope_name = scope_image_parts.join("/");
-                          scope_parts[1] = &scope_name;
-                          let new_scope = scope_parts.join(":");
-                          info!("Converted scope {} -> {}", auth_req.scope.unwrap_or_default(), new_scope);
-                          auth_req.scope = Some(new_scope);
+                            // convert namespace from id to bucket
+                            let mut scope_image_parts = scope_image_parts.to_vec();
+                            scope_image_parts[0] = &bucket_clone;
+                            let mut scope_parts = scope_parts.to_vec();
+                            let scope_name = scope_image_parts.join("/");
+                            scope_parts[1] = &scope_name;
+                            let new_scope = scope_parts.join(":");
+                            info!(
+                                "Converted scope {} -> {}",
+                                auth_req.scope.unwrap_or_default(),
+                                new_scope
+                            );
+                            auth_req.scope = Some(new_scope);
                         }
                     }
                     Ok(None) => {
-                        warn!(user = username, "Game not found for namespace: {}", namespace);
+                        warn!(
+                            user = username,
+                            "Game not found for namespace: {}", namespace
+                        );
                         return create_error_response(StatusCode::UNAUTHORIZED, "Access denied");
                     }
                     Err(e) => {

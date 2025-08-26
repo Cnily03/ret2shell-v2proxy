@@ -7,7 +7,7 @@ use axum::{
 };
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use std::sync::Arc;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     models::{Claims, ProxyContext},
@@ -24,7 +24,10 @@ impl AuthMiddleware {
         next: Next,
     ) -> Result<Response, StatusCode> {
         // Extract scope from path
-        let namespace = params.get("namespace").map(String::as_str).unwrap_or("library");
+        let namespace = params
+            .get("namespace")
+            .map(String::as_str)
+            .unwrap_or("library");
         let repository = params.get("repository").map(String::as_str).unwrap_or("_");
         if repository == "_" {
             return Err(StatusCode::FORBIDDEN);
@@ -39,10 +42,14 @@ impl AuthMiddleware {
                 if namespace != game.bucket {
                     info!("Translate namespace {} -> {}", namespace, game.bucket);
                     let uri = request.uri();
-                    let new_uri = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or(uri.path()).replace(
-                        &format!("/v2/{}/{}/", namespace, repository),
-                        &format!("/v2/{}/{}/", game.bucket, repository)
-                    );
+                    let new_uri = uri
+                        .path_and_query()
+                        .map(|pq| pq.as_str())
+                        .unwrap_or(uri.path())
+                        .replace(
+                            &format!("/v2/{}/{}/", namespace, repository),
+                            &format!("/v2/{}/{}/", game.bucket, repository),
+                        );
 
                     // change request uri
                     debug!("Modify uri: {} -> {}", uri.path(), new_uri);
@@ -61,7 +68,6 @@ impl AuthMiddleware {
                 return Err(StatusCode::SERVICE_UNAVAILABLE);
             }
         };
-
 
         let repo = format!("{}/{}", namespace, repository);
         debug!("Checking scope admin permission for scope: {}", repo);
@@ -151,17 +157,20 @@ impl AuthMiddleware {
             Some(_) => {}
             None => {
                 let uri = request.uri();
-                let new_uri = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or(uri.path()).replace(
-                    &format!("/v2/{}/", repository),
-                    &format!("/v2/library/{}/", repository)
-                );
+                let new_uri = uri
+                    .path_and_query()
+                    .map(|pq| pq.as_str())
+                    .unwrap_or(uri.path())
+                    .replace(
+                        &format!("/v2/{}/", repository),
+                        &format!("/v2/library/{}/", repository),
+                    );
 
                 // change request uri
                 debug!("Modify uri: {} -> {}", uri.path(), new_uri);
                 *request.uri_mut() = axum::http::Uri::try_from(new_uri).unwrap();
             }
         }
-
 
         debug!("Checking library access for repository: {}", repository);
 
@@ -247,4 +256,3 @@ impl AuthMiddleware {
         Err(StatusCode::UNAUTHORIZED)
     }
 }
-
