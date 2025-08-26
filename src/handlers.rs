@@ -182,7 +182,7 @@ pub async fn auth_handler(
     // Check if user can authenticate
     if !user.can_authenticate() {
         warn!(
-            "User {} cannot authenticate (not verified or banned)",
+            "User '{}' cannot authenticate (not verified or banned)",
             username
         );
         return create_error_response(
@@ -193,7 +193,7 @@ pub async fn auth_handler(
 
     // Check if user can access registry
     if !user.can_access_registry() {
-        warn!("User {} does not have Game permission", username);
+        warn!("User '{}' does not have Game permission", username);
         return create_error_response(StatusCode::FORBIDDEN, "Access denied");
     }
 
@@ -234,7 +234,7 @@ pub async fn auth_handler(
 
                 if has_write_action && !user.can_write_library() {
                     warn!(
-                        "User {} does not have DevOps permission for library write",
+                        "User '{}' does not have DevOps permission for library write",
                         username
                     );
                     return create_error_response(StatusCode::UNAUTHORIZED, "Access denied");

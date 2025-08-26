@@ -70,7 +70,7 @@ impl AuthMiddleware {
 
                             if !has_scope_permission {
                                 warn!(
-                                    "User {} does not have permission for scope: {}",
+                                    "User '{}' does not have permission for scope: {}",
                                     token_data.claims.sub, scope
                                 );
                                 return Err(StatusCode::FORBIDDEN);
@@ -143,7 +143,7 @@ impl AuthMiddleware {
 
                             if !has_library_permission {
                                 warn!(
-                                    "User {} does not have permission for library",
+                                    "User '{}' does not have permission for library",
                                     token_data.claims.sub
                                 );
                                 return Err(StatusCode::FORBIDDEN);
@@ -160,7 +160,7 @@ impl AuthMiddleware {
 
                                 if !has_push_permission {
                                     warn!(
-                                        "User {} does not have push permission for library",
+                                        "User '{}' does not have push permission for library",
                                         token_data.claims.sub
                                     );
                                     return Err(StatusCode::FORBIDDEN);
