@@ -1,0 +1,62 @@
+# Rust 构建产物
+target/
+debug/
+release/
+
+# IDE 和编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统生成的文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 环境文件
+.env
+.env.local
+.env.*.local
+
+# 临时文件
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Git 文件
+.git/
+.gitignore
+
+# Docker 文件（避免递归）
+Dockerfile*
+.dockerignore
+docker-compose.yml
+docker-compose.yaml
+
+# 文档和说明文件
+README.md
+*.md
+docs/
+
+# 测试文件
+tests/
+test_*
+
+# 备份文件
+*.bak
+*.backup
+
+# 覆盖率报告
+coverage/
+*.profdata
+*.profraw
