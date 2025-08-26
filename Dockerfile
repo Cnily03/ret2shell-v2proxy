@@ -3,24 +3,23 @@ FROM rust:alpine AS builder
 WORKDIR /app
 
 RUN update-ca-certificates
-RUN apk add --no-cache openssl-dev openssl-libs-static musl-dev pkgconfig clang lld curl
+RUN apk add --no-cache openssl-dev openssl-libs-static musl-dev pkgconfig clang lld curl upx
 
 COPY .cargo ./.cargo
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
 RUN cargo build --bin r2s-v2proxy --release --target x86_64-unknown-linux-musl && \
+    upx --best --lzma target/x86_64-unknown-linux-musl/release/r2s-v2proxy && \
     mkdir -p /usr/local/bin && \
     cp target/x86_64-unknown-linux-musl/release/r2s-v2proxy /usr/local/bin/r2s-v2proxy
 
 FROM alpine:latest AS healthcheck
 
-# need command: clang++ upx make
 RUN apk add --no-cache clang lld upx make sudo
 WORKDIR /app
 COPY healthcheck/ .
 RUN make ultra && make install
-
 
 FROM scratch
 
