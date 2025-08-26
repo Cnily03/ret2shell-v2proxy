@@ -37,7 +37,7 @@ services:
     depends_on:
       - platform
     environment:
-      - V2_SERVICE: ret2shell
+      V2_SERVICE: ret2shell
     # extra_hosts:
     #   - host.docker.internal:host-gateway
     volumes:
