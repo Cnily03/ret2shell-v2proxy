@@ -1,13 +1,13 @@
 use axum::{
     body::Body,
-    extract::State,
+    extract::{Path, State},
     http::{Request, StatusCode},
     middleware::Next,
     response::Response,
 };
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn, error};
 
 use crate::{
     models::{Claims, ProxyContext},
@@ -19,27 +19,56 @@ pub struct AuthMiddleware;
 impl AuthMiddleware {
     pub async fn scope_admin_required(
         State(state): State<Arc<AppState>>,
+        Path(params): Path<std::collections::HashMap<String, String>>,
         request: Request<Body>,
         next: Next,
     ) -> Result<Response, StatusCode> {
         // Extract scope from path
-        let path = request.uri().path();
-        let segments: Vec<&str> = path.split('/').collect();
-
-        if segments.len() < 4 {
-            warn!("Invalid path format: {}", path);
-            return Err(StatusCode::NOT_FOUND);
+        let namespace = params.get("namespace").map(String::as_str).unwrap_or("library");
+        let repository = params.get("repository").map(String::as_str).unwrap_or("_");
+        if repository == "_" {
+            return Err(StatusCode::FORBIDDEN);
         }
 
-        // For /v2/{namespace}/{repository}/... structure
-        let namespace = segments[2];
-        let repository = segments[3];
-        let scope = format!("{}/{}", namespace, repository);
-        debug!("Checking scope admin permission for scope: {}", scope);
+        let mut request = request;
+
+        // try change namespace from game id to bucket
+        let namespace = match state.database.get_game_by_namespace(namespace).await {
+            Ok(Some(game)) => {
+                debug!("Game found by namespace: {}", namespace);
+                if namespace != game.bucket {
+                    info!("Translate namespace {} -> {}", namespace, game.bucket);
+                    let uri = request.uri();
+                    let new_uri = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or(uri.path()).replace(
+                        &format!("/v2/{}/{}/", namespace, repository),
+                        &format!("/v2/{}/{}/", game.bucket, repository)
+                    );
+
+                    // change request uri
+                    debug!("Modify uri: {} -> {}", uri.path(), new_uri);
+                    *request.uri_mut() = axum::http::Uri::try_from(new_uri).unwrap();
+                    game.bucket
+                } else {
+                    namespace.to_string()
+                }
+            }
+            Ok(None) => {
+                debug!("No game found by namespace: {}", namespace);
+                return Err(StatusCode::FORBIDDEN);
+            }
+            Err(e) => {
+                error!("Error fetching game by namespace: {}", e);
+                return Err(StatusCode::SERVICE_UNAVAILABLE);
+            }
+        };
+
+
+        let repo = format!("{}/{}", namespace, repository);
+        debug!("Checking scope admin permission for scope: {}", repo);
 
         // Special handling for library scope
         if namespace == "library" {
-            return Self::library_access_required(State(state), request, next).await;
+            return Self::library_access_required(State(state), Path(params), request, next).await;
         }
 
         // Check JWT token
@@ -64,14 +93,14 @@ impl AuthMiddleware {
                             // Check if user has permission for this scope
                             let has_scope_permission =
                                 token_data.claims.access.iter().any(|access| {
-                                    access.name.starts_with(&format!("{}/", scope))
-                                        || access.name == scope
+                                    access.name.starts_with(&format!("{}/", repo))
+                                        || access.name == repo
                                 });
 
                             if !has_scope_permission {
                                 warn!(
                                     "User '{}' does not have permission for scope: {}",
-                                    token_data.claims.sub, scope
+                                    token_data.claims.sub, repo
                                 );
                                 return Err(StatusCode::FORBIDDEN);
                             }
@@ -82,12 +111,11 @@ impl AuthMiddleware {
                             );
 
                             // Add user context to request extensions
-                            let mut request = request;
-                            let user_context = ProxyContext {
+                            let proxy_context = ProxyContext {
                                 account: token_data.claims.sub.clone(),
-                                scope: scope.clone(),
+                                repo: repo.clone(),
                             };
-                            request.extensions_mut().insert(user_context);
+                            request.extensions_mut().insert(proxy_context);
 
                             return Ok(next.run(request).await);
                         }
@@ -101,17 +129,41 @@ impl AuthMiddleware {
         }
 
         // No valid JWT token - reject all access
-        warn!("No valid authentication for scope: {}", scope);
+        warn!("No valid authentication for scope: {}", repo);
         Err(StatusCode::UNAUTHORIZED)
     }
 
     pub async fn library_access_required(
         State(state): State<Arc<AppState>>,
+        Path(params): Path<std::collections::HashMap<String, String>>,
         request: Request<Body>,
         next: Next,
     ) -> Result<Response, StatusCode> {
-        let method = request.method();
-        debug!("Checking library access for method: {}", method);
+        let method = request.method().clone();
+        let repository = params.get("repository").map(String::as_str).unwrap_or("_");
+        if repository == "_" {
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        let mut request = request;
+        // if no namespace, add 'library' to namespace
+        match params.get("namespace") {
+            Some(_) => {}
+            None => {
+                let uri = request.uri();
+                let new_uri = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or(uri.path()).replace(
+                    &format!("/v2/{}/", repository),
+                    &format!("/v2/library/{}/", repository)
+                );
+
+                // change request uri
+                debug!("Modify uri: {} -> {}", uri.path(), new_uri);
+                *request.uri_mut() = axum::http::Uri::try_from(new_uri).unwrap();
+            }
+        }
+
+
+        debug!("Checking library access for repository: {}", repository);
 
         // Check JWT token
         let auth_header = request.headers().get("authorization");
@@ -173,12 +225,11 @@ impl AuthMiddleware {
                             );
 
                             // Add user context to request extensions
-                            let mut request = request;
-                            let user_context = ProxyContext {
+                            let proxy_context = ProxyContext {
                                 account: token_data.claims.sub.clone(),
-                                scope: "library".to_string(),
+                                repo: format!("library/{}", repository),
                             };
-                            request.extensions_mut().insert(user_context);
+                            request.extensions_mut().insert(proxy_context);
 
                             return Ok(next.run(request).await);
                         }
@@ -196,3 +247,4 @@ impl AuthMiddleware {
         Err(StatusCode::UNAUTHORIZED)
     }
 }
+

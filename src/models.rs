@@ -5,7 +5,7 @@ use sqlx::{FromRow, Row};
 #[allow(dead_code)]
 pub struct ProxyContext {
     pub account: String,
-    pub scope: String,
+    pub repo: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

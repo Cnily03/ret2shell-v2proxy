@@ -114,28 +114,28 @@ async fn build_app(state: Arc<AppState>) -> Router {
         )
         // Library operations with library-specific authentication
         .route(
-            "/v2/library/manifests/{reference}",
+            "/v2/{repository}/manifests/{reference}",
             any(proxy_handler).layer(from_fn_with_state(
                 state.clone(),
                 AuthMiddleware::library_access_required,
             )),
         )
         .route(
-            "/v2/library/blobs/{digest}",
+            "/v2/{repository}/blobs/{digest}",
             any(proxy_handler).layer(from_fn_with_state(
                 state.clone(),
                 AuthMiddleware::library_access_required,
             )),
         )
         .route(
-            "/v2/library/blobs/uploads/",
+            "/v2/{repository}/blobs/uploads/",
             any(proxy_handler).layer(from_fn_with_state(
                 state.clone(),
                 AuthMiddleware::library_access_required,
             )),
         )
         .route(
-            "/v2/library/blobs/uploads/{uuid}",
+            "/v2/{repository}/blobs/uploads/{uuid}",
             any(proxy_handler).layer(from_fn_with_state(
                 state.clone(),
                 AuthMiddleware::library_access_required,

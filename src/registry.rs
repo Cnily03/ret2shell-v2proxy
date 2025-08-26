@@ -27,12 +27,12 @@ pub async fn proxy_request(
     let headers = request.headers().clone();
 
     // Extract user context from request extensions (clone it before consuming request)
-    let user_context = request.extensions().get::<ProxyContext>().cloned();
+    let proxy_context = request.extensions().get::<ProxyContext>().cloned();
 
     info!(
         method = %method,
         path = %path,
-        context = ?user_context,
+        context = ?proxy_context,
         "Proxying request"
     );
 
@@ -102,7 +102,7 @@ pub async fn proxy_request(
     debug!(
         status = %status_code,
         headers = ?response.headers(),
-        context = ?user_context,
+        context = ?proxy_context,
         "Response details"
     );
 

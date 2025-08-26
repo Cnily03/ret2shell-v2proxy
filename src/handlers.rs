@@ -81,23 +81,13 @@ pub async fn registry_v2_check(
         let service_name = get_service_name!();
 
         let www_auth_value = format!(r#"Bearer realm="{}",service="{}""#, realm, service_name);
-        let fallback_value = format!(
-            r#"Bearer realm="http://localhost:1331/v2/token",service="{}""#,
-            service_name
-        );
 
         // Return 401 with WWW-Authenticate header to trigger Docker auth flow
         let mut response = Response::new(axum::body::Body::empty());
         *response.status_mut() = StatusCode::UNAUTHORIZED;
         response.headers_mut().insert(
             "WWW-Authenticate",
-            HeaderValue::from_str(&www_auth_value).unwrap_or_else(|_| {
-                HeaderValue::from_str(&fallback_value).unwrap_or_else(|_| {
-                    HeaderValue::from_static(
-                        r#"Bearer realm="http://localhost:1331/v2/token",service="ret2shell""#,
-                    )
-                })
-            }),
+            HeaderValue::from_str(&www_auth_value).unwrap(),
         );
         response.headers_mut().insert(
             "Docker-Distribution-API-Version",
@@ -119,7 +109,7 @@ pub async fn registry_v2_check(
 pub async fn auth_handler(
     State(state): State<Arc<AppState>>,
     Query(auth_req): Query<AuthRequest>,
-    headers: HeaderMap,
+    headers: HeaderMap
 ) -> impl IntoResponse {
     debug!(
         service = auth_req.service,
@@ -198,29 +188,34 @@ pub async fn auth_handler(
     }
 
     // Check scope permissions if specified
+    let mut auth_req = auth_req;
     if let Some(scope_str) = &auth_req.scope {
         let scope_parts: Vec<&str> = scope_str.split(':').collect();
         if scope_parts.len() >= 2 {
             let scope_name = scope_parts[1];
 
-            // Parse scope/image format
+            // Parse namespace/image format
             let scope_image_parts: Vec<&str> = scope_name.splitn(2, '/').collect();
-            if scope_image_parts.len() != 2 {
+
+            if scope_image_parts.len() != 2 && scope_image_parts.len() != 1 {
                 warn!("Invalid scope format: {}", scope_name);
                 return create_error_response(StatusCode::BAD_REQUEST, "Invalid request format");
             }
 
-            let scope = scope_image_parts[0];
-            let image = scope_image_parts[1];
+            let (namespace, image_name) = if scope_image_parts.len() == 2 {
+                (scope_image_parts[0], scope_image_parts[1])
+            } else {
+                ("library", scope_image_parts[0]) // Default to library if no namespace
+            };
 
             // Check if image contains '/' (not allowed)
-            if image.contains('/') {
-                warn!("Image name contains '/', not allowed: {}", image);
+            if image_name.contains('/') {
+                warn!("Image name contains '/', not allowed: {}", image_name);
                 return create_error_response(StatusCode::BAD_REQUEST, "Invalid request format");
             }
 
             // Special handling for library scope
-            if scope == "library" {
+            if namespace == "library" {
                 // For library scope, check if user has required permissions
                 let actions: Vec<&str> = if scope_parts.len() >= 3 {
                     scope_parts[2].split(',').collect()
@@ -239,20 +234,38 @@ pub async fn auth_handler(
                     );
                     return create_error_response(StatusCode::UNAUTHORIZED, "Access denied");
                 }
+
+                let mut scope_parts_clone = scope_parts.clone();
+                let library_scope = format!("library/{}", scope_parts_clone[1]);
+                scope_parts_clone[1] = &library_scope;
+                info!("Converted scope {} -> {}", auth_req.scope.clone().unwrap_or_default(), library_scope);
+                auth_req.scope = Some(scope_parts_clone.join(":"));
             } else {
                 // Check if user is admin of the specified game scope
-                match state.database.get_game_by_scope(scope).await {
+                match state.database.get_game_by_namespace(namespace).await {
                     Ok(Some(game)) => {
                         if !game.is_admin(user.id) {
-                            warn!("User '{}' is not admin of game scope: {}", username, scope);
+                            warn!("User '{}' is not admin of game {}: {}", username, game.id, game.bucket);
                             return create_error_response(
                                 StatusCode::UNAUTHORIZED,
                                 "Access denied",
                             );
                         }
+                        let bucket_clone = game.bucket.clone();
+                        if bucket_clone != namespace {
+                          // convert namespace from id to bucket
+                          let mut scope_image_parts = scope_image_parts.to_vec();
+                          scope_image_parts[0] = &bucket_clone;
+                          let mut scope_parts = scope_parts.to_vec();
+                          let scope_name = scope_image_parts.join("/");
+                          scope_parts[1] = &scope_name;
+                          let new_scope = scope_parts.join(":");
+                          info!("Converted scope {} -> {}", auth_req.scope.unwrap_or_default(), new_scope);
+                          auth_req.scope = Some(new_scope);
+                        }
                     }
                     Ok(None) => {
-                        warn!(user = username, "Game not found for scope: {}", scope);
+                        warn!(user = username, "Game not found for namespace: {}", namespace);
                         return create_error_response(StatusCode::UNAUTHORIZED, "Access denied");
                     }
                     Err(e) => {

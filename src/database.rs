@@ -52,10 +52,10 @@ impl Database {
         Ok(user)
     }
 
-    pub async fn get_game_by_scope(&self, scope: &str) -> Result<Option<Game>> {
+    pub async fn get_game_by_namespace(&self, namespace: &str) -> Result<Option<Game>> {
         // First try to parse as ID (all digits)
-        if scope.chars().all(|c| c.is_ascii_digit()) {
-            if let Ok(id) = scope.parse::<i64>() {
+        if namespace.chars().all(|c| c.is_ascii_digit()) {
+            if let Ok(id) = namespace.parse::<i64>() {
                 let game = sqlx::query_as::<_, Game>(
                     r#"
                     SELECT id, bucket, admins
@@ -81,7 +81,7 @@ impl Database {
             WHERE bucket = $1
             "#,
         )
-        .bind(scope)
+        .bind(namespace)
         .fetch_optional(&self.pool)
         .await?;
 
