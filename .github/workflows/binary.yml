@@ -1,0 +1,101 @@
+name: Binary
+
+on:
+  push:
+    paths:
+      - ".github/workflows/binary.yml"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+
+  workflow_dispatch:
+
+jobs:
+  binary:
+    name: Build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          # - os: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          # - os: macos-latest
+          #   target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch depth 0 to fetch all history for git-restore-mtime-action
+          fetch-depth: 1
+
+      # - uses: chetan/git-restore-mtime-action@v2
+
+      - name: Setup environment (ubuntu)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          sudo apt update && sudo apt install -y musl-tools musl-dev clang lld
+
+      # - name: Setup environment (macos)
+      #   if: ${{ matrix.os == 'macos-latest' }}
+      #   run: |
+      #     brew install llvm && brew link --force llvm
+
+      - name: Setup rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Cache target
+        uses: actions/cache@v4
+        with:
+          path: target/
+          key: rustc-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            rustc-${{ runner.os }}-${{ matrix.target }}-
+            rustc-${{ runner.os }}-
+
+      - name: Build
+        run: |
+          cargo build --bin r2s-v2proxy --release --target '${{ matrix.target }}'
+
+      # - name: Upload artifact
+      #   continue-on-error: true
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: r2s-v2proxy-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}-${{ matrix.target }}
+      #     path: |
+      #       target/${{ matrix.target }}/release/r2s-v2proxy
+      #     retention-days: 1
+
+  clippy-check:
+    name: Check
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Setup clippy
+      id: setup-clippy
+      run: rustup component add clippy
+
+    - name: Cargo clippy checks
+      run: |
+        cargo clippy --all-features --all-targets # -- -D warnings
