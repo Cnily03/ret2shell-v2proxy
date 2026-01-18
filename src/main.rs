@@ -2,6 +2,7 @@ mod auth;
 mod config;
 mod database;
 mod handlers;
+mod logging;
 mod middleware;
 mod models;
 mod registry;
@@ -15,8 +16,7 @@ use axum::{
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing::{info, Level};
-use tracing_subscriber;
+use tracing::info;
 
 use crate::{
     config::Config,
@@ -28,7 +28,7 @@ use crate::{
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
+    logging::init_logger();
 
     info!("Starting ret2shell-v2-proxy server...");
 
