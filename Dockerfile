@@ -34,8 +34,8 @@ ARG V2_SERVICE=ret2shell
 ENV V2_SERVICE=${V2_SERVICE}
 
 HEALTHCHECK --interval=5m --timeout=3s --start-period=10s --retries=1 \
-    CMD healthcheck http://localhost:1331/health
+    CMD healthcheck http://localhost:${LISTEN_PORT}/health
 
-EXPOSE 1331
+EXPOSE ${LISTEN_PORT}
 
 ENTRYPOINT ["/r2s-v2proxy"]
