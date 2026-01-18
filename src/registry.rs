@@ -1,13 +1,60 @@
 use anyhow::Result;
 use axum::{
     body::Body,
-    http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode},
+    http::{uri, HeaderMap, HeaderValue, Method, Request, Response, StatusCode},
 };
 use reqwest::Client;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
 use crate::{models::ProxyContext, AppState};
+
+fn infer_origin(headers: &HeaderMap) -> Result<String> {
+    let mut scheme = "http".to_string();
+    let mut host = "".to_string();
+
+    if let Some(uri_str) = headers.get("x-forwarded-uri").and_then(|v| v.to_str().ok()) {
+        if let Ok(u) = uri::Uri::try_from(uri_str) {
+            if let Some(s) = u.scheme_str() {
+                scheme = s.to_string();
+            }
+            if let Some(h) = u.host() {
+                host = h.to_string();
+            }
+        }
+    }
+
+    if let Some(origin) = headers
+        .get("x-forwarded-origin")
+        .and_then(|v| v.to_str().ok())
+    {
+        return Ok(origin.to_string());
+    }
+
+    if let Some(h) = headers
+        .get("x-forwarded-host")
+        .and_then(|v| v.to_str().ok())
+    {
+        host = h.to_string();
+    }
+
+    if let Some(s) = headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+    {
+        scheme = s.to_string();
+    }
+
+    if let Some(h) = headers.get("host").and_then(|v| v.to_str().ok()) {
+        host = h.to_string();
+    }
+
+    if !host.is_empty() {
+        return Ok(format!("{}://{}", scheme, host));
+    }
+
+    Err(anyhow::anyhow!("Cannot extract host from request headers"))
+}
 
 pub async fn proxy_request(
     state: Arc<AppState>,
@@ -28,7 +75,6 @@ pub async fn proxy_request(
 
     // Extract user context from request extensions (clone it before consuming request)
     let proxy_context = request.extensions().get::<ProxyContext>().cloned();
-
     info!(
         method = %method,
         path = %path,
@@ -121,12 +167,43 @@ pub async fn proxy_request(
             continue;
         }
 
+        // Replace header location with the original request origin
+        if name_str.eq_ignore_ascii_case("location") {
+            let loc = value.to_str().map_err(|e| {
+                error!("Invalid location header value: {}", e);
+                StatusCode::BAD_GATEWAY
+            })?;
+            let origin = infer_origin(&headers).map_err(|e| {
+                error!("Failed to infer origin from request: {}", e);
+                StatusCode::BAD_REQUEST
+            })?;
+            let new_location = match uri::Uri::try_from(loc) {
+                Ok(u) => {
+                    let path_and_query = u.path_and_query().map_or("", |pq| pq.as_str());
+                    format!("{}{}", origin, path_and_query)
+                }
+                Err(_) => {
+                    // If location is a relative path, just prepend the origin
+                    format!("{}{}", origin, loc)
+                }
+            };
+            if let Ok(new_value) = HeaderValue::from_str(&new_location) {
+                response_headers.insert(name.clone(), new_value);
+            }
+            continue;
+        }
+
         if let Ok(header_value) = HeaderValue::from_bytes(value_bytes) {
             if let Ok(header_name) = name_str.parse::<axum::http::HeaderName>() {
                 response_headers.insert(header_name, header_value);
             }
         }
     }
+
+    debug!(
+        headers = ?response_headers,
+        "Response headers processed"
+    );
 
     let body_bytes = match response.bytes().await {
         Ok(bytes) => bytes,
