@@ -13,17 +13,7 @@ fn infer_origin(headers: &HeaderMap) -> Result<String> {
     let mut scheme = "http".to_string();
     let mut host = "".to_string();
 
-    if let Some(uri_str) = headers.get("x-forwarded-uri").and_then(|v| v.to_str().ok()) {
-        if let Ok(u) = uri::Uri::try_from(uri_str) {
-            if let Some(s) = u.scheme_str() {
-                scheme = s.to_string();
-            }
-            if let Some(h) = u.host() {
-                host = h.to_string();
-            }
-        }
-    }
-
+    // directly return if x-forwarded-origin is present
     if let Some(origin) = headers
         .get("x-forwarded-origin")
         .and_then(|v| v.to_str().ok())
@@ -31,12 +21,7 @@ fn infer_origin(headers: &HeaderMap) -> Result<String> {
         return Ok(origin.to_string());
     }
 
-    if let Some(h) = headers
-        .get("x-forwarded-host")
-        .and_then(|v| v.to_str().ok())
-    {
-        host = h.to_string();
-    }
+    // infer scheme and host
 
     if let Some(s) = headers
         .get("x-forwarded-proto")
@@ -47,6 +32,24 @@ fn infer_origin(headers: &HeaderMap) -> Result<String> {
 
     if let Some(h) = headers.get("host").and_then(|v| v.to_str().ok()) {
         host = h.to_string();
+    }
+
+    if let Some(h) = headers
+        .get("x-forwarded-host")
+        .and_then(|v| v.to_str().ok())
+    {
+        host = h.to_string();
+    }
+
+    if let Some(uri_str) = headers.get("x-forwarded-uri").and_then(|v| v.to_str().ok()) {
+        if let Ok(u) = uri::Uri::try_from(uri_str) {
+            if let Some(s) = u.scheme_str() {
+                scheme = s.to_string();
+            }
+            if let Some(h) = u.host() {
+                host = h.to_string();
+            }
+        }
     }
 
     if !host.is_empty() {
@@ -184,7 +187,12 @@ pub async fn proxy_request(
                 }
                 Err(_) => {
                     // If location is a relative path, just prepend the origin
-                    format!("{}{}", origin, loc)
+                    let p = if loc.starts_with('/') {
+                        loc.to_string()
+                    } else {
+                        format!("/{}", loc)
+                    };
+                    format!("{}{}", origin, p)
                 }
             };
             if let Ok(new_value) = HeaderValue::from_str(&new_location) {
